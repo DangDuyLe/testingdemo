@@ -31,7 +31,12 @@ export async function GET(request: Request) {
     // 1) Directly fallback to Neo4j query (no Etherscan API call)
     const session = driver.session();
     try {
-      const offsetNumber = parseInt(offset, 10);
+      // Ensure offset is a valid integer and greater than 0
+      let offsetNumber = parseInt(offset, 10);
+      if (isNaN(offsetNumber) || offsetNumber <= 0) {
+        offsetNumber = 50; // Fallback to default value if invalid
+      }
+
       const pageNumber = parseInt(page, 10);
       const skip = (pageNumber - 1) * offsetNumber;
 
