@@ -27,18 +27,34 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Address is required" }, { status: 400 });
   }
 
+  // Log the received `offset` and `page` values for debugging
+  console.log("Received page:", page);
+  console.log("Received offset:", offset);
+
   try {
     // 1) Directly fallback to Neo4j query (no Etherscan API call)
     const session = driver.session();
     try {
-      // Ensure offset is a valid integer and greater than 0
+      // Parse the `offset` as an integer and validate it
       let offsetNumber = parseInt(offset, 10);
+
+      // If the parsed offset is invalid or <= 0, fallback to 50
       if (isNaN(offsetNumber) || offsetNumber <= 0) {
-        offsetNumber = 50; // Fallback to default value if invalid
+        offsetNumber = 50; 
+        console.log("Offset is invalid. Falling back to default value of 50.");
       }
 
       const pageNumber = parseInt(page, 10);
+      if (isNaN(pageNumber) || pageNumber <= 0) {
+        console.log("Page is invalid. Falling back to default value of 1.");
+        pageNumber = 1; // Fallback to page 1 if invalid
+      }
+
       const skip = (pageNumber - 1) * offsetNumber;
+
+      // Log final values of skip and limit for debugging
+      console.log("Final skip:", skip);
+      console.log("Final limit:", offsetNumber);
 
       // Adjust this Cypher query to match your Neo4j schema
       const query = `
