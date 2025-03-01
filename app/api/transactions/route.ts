@@ -33,6 +33,11 @@ export async function GET(request: Request) {
   console.log("Loaded ETHERSCAN_API_KEY:", process.env.ETHERSCAN_API_KEY);
 
   try {
+    // Check if we want to force the fallback to Neo4j
+    if (process.env.FORCE_NEO4J === "true") {
+      throw new Error("Forced fallback to Neo4j");
+    }
+
     // 1) Attempt to fetch transactions from Etherscan
     const response = await fetch(
       `${ETHERSCAN_API_URL}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${offset}&sort=desc&apikey=${process.env.ETHERSCAN_API_KEY}`
