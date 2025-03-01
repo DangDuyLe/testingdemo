@@ -28,37 +28,33 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1) Directly fallback to Neo4j query (no Etherscan API call)
     const session = driver.session();
     try {
-      // Ensure offset is a valid integer and greater than 0
+      // Parse and validate offset
       let offsetNumber = parseInt(offset, 10);
-
-      // Ensure offset is an integer and fix floating point errors
       if (isNaN(offsetNumber) || offsetNumber <= 0) {
-        offsetNumber = 50; // Fallback to default value if invalid
-      } else {
-        // Explicitly ensure that offset is an integer without floating point
-        offsetNumber = Math.floor(offsetNumber);
+        offsetNumber = 50;
       }
+      offsetNumber = Math.floor(offsetNumber); // Ensure integer
 
+      // Parse page and calculate skip
       const pageNumber = parseInt(page, 10);
       const skip = (pageNumber - 1) * offsetNumber;
 
-      
-
-      // Adjust this Cypher query to match your Neo4j schema and the relationships
+      // Cypher query
       const query = `
-     MATCH (wallet)-[tx:Transfer]-(other)
-WHERE wallet.addressId = $address
-RETURN wallet, tx, other
-SKIP $skip
-LIMIT $limit
+        MATCH (wallet)-[tx:Transfer]-(other)
+        WHERE wallet.addressId = $address
+        RETURN wallet, tx, other
+        SKIP $skip
+        LIMIT $limit
       `;
+
+      // Pass parameters as Neo4j integers
       const result = await session.run(query, {
         address,
-        skip,
-        limit: offsetNumber, // Make sure the limit is an integer here
+        skip: neo4j.int(skip),       // Convert to Neo4j integer
+        limit: neo4j.int(offsetNumber) // Convert to Neo4j integer
       });
 
       // Convert Neo4j records to plain objects
