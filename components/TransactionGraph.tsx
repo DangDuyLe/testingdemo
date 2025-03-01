@@ -62,7 +62,7 @@ export default function TransactionGraph() {
     if (address) {
       setLoading(true);
       setError(null);
-      fetch(`/api/transactions?address=${address}&offset=50`)
+      fetch(`/api/transactions?address=${address}&offset=100`)
         .then((res) => res.json())
         .then((data: unknown) => {
           if (!Array.isArray(data)) {

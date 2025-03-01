@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const address = searchParams.get("address");
   const page = searchParams.get("page") || "1";
-  const offset = searchParams.get("offset") || "50";
+  const offset = searchParams.get("offset") || "100";
 
   if (!address) {
     return NextResponse.json({ error: "Address is required" }, { status: 400 });
