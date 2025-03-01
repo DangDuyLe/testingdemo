@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 
-// Dynamically import ForceGraph2D for rendering the graph
+// Dynamically import ForceGraph2D
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
 
 // Define the structure of a transaction
@@ -46,7 +46,7 @@ interface ApiResponse {
   page: number;
   limit: number;
   total: number;
-  transactions: Transaction[];
+  transactions: any[]; // Flexible to handle diverse transaction data structures
   error?: string;
 }
 
@@ -97,23 +97,40 @@ export default function TransactionGraph() {
 
         // Process transactions to create nodes and links
         transactions.forEach((tx) => {
-          if (tx?.from && tx?.to) {
-            [tx.from, tx.to].forEach((addr) => {
-              if (addr && !nodes.has(addr)) {
-                const name = getNameForAddress(addr);
-                nodes.set(addr, {
-                  id: addr,
-                  label: name || shortenAddress(addr),
-                  color: getRandomColor(),
-                  type: addr === address ? "out" : "in",
-                });
-              }
-            });
+          // Extracting from and to wallet addresses from query result
+          const fromAddress = tx?.From?.addressId; // From Wallet Address
+          const toAddress = tx?.To?.addressId; // To Wallet Address
+          const value = tx?.Transfer?.value; // Transaction Value
 
+          // Ensure addresses are valid
+          if (fromAddress && toAddress) {
+            // Add From address node
+            if (!nodes.has(fromAddress)) {
+              const name = getNameForAddress(fromAddress);
+              nodes.set(fromAddress, {
+                id: fromAddress,
+                label: name || shortenAddress(fromAddress),
+                color: getRandomColor(),
+                type: "out", // From address is "out"
+              });
+            }
+
+            // Add To address node
+            if (!nodes.has(toAddress)) {
+              const name = getNameForAddress(toAddress);
+              nodes.set(toAddress, {
+                id: toAddress,
+                label: name || shortenAddress(toAddress),
+                color: getRandomColor(),
+                type: "in", // To address is "in"
+              });
+            }
+
+            // Link the addresses with the transaction value
             links.push({
-              source: tx.from,
-              target: tx.to,
-              value: Number.parseFloat(tx.value),
+              source: fromAddress,
+              target: toAddress,
+              value: Number.parseFloat(value || "0"),
             });
           }
         });
@@ -137,22 +154,6 @@ export default function TransactionGraph() {
     },
     []
   );
-
-  // Update node types based on transaction directions
-  useEffect(() => {
-    if (graphData) {
-      const updatedNodes = graphData.nodes.map((node) => {
-        const incoming = graphData.links.filter((link) => link.target === node.id);
-        const outgoing = graphData.links.filter((link) => link.source === node.id);
-        return {
-          ...node,
-          type: incoming.length > 0 && outgoing.length > 0 ? "both" : node.type,
-        };
-      });
-
-      setGraphData({ ...graphData, nodes: updatedNodes });
-    }
-  }, [graphData]);
 
   // Render loading state
   if (loading) {
