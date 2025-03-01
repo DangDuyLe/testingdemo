@@ -64,7 +64,7 @@ export default function TransactionGraph() {
       setError(null);
 
       // Fetch transactions with the given offset
-      fetch(`/api/transactions?address=${address}&offset=50`)
+      fetch(`/api/transactions?address=${address}&offset=${Number(50)}`)
       .then((res) => res.json())
         .then((data: unknown) => {
           if (!Array.isArray(data)) {
