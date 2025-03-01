@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const address = searchParams.get("address");
   const page = searchParams.get("page") || "1";
-  const offset = searchParams.get("offset") || "100";
+  const offset = searchParams.get("offset") || "50";
 
   if (!address) {
     return NextResponse.json({ error: "Address is required" }, { status: 400 });
@@ -37,8 +37,8 @@ export async function GET(request: Request) {
   }
 
   // Ensure that both pageNumber and offsetNumber are integers (no decimals)
-  const limit = Math.floor(offsetNumber); // Ensure it's a non-negative integer
-  const skip = Math.floor((pageNumber - 1) * limit); // Ensure skip is also a non-negative integer
+  const limit = Math.max(0, Math.floor(offsetNumber)); // Ensure it's a non-negative integer, 0 will prevent errors
+  const skip = Math.max(0, Math.floor((pageNumber - 1) * limit)); // Ensure skip is also a non-negative integer
 
   // Log that we are fetching data from the Neo4j database
   console.log("Fetching data from Neo4j database for address:", address);
