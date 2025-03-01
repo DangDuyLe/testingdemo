@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     try {
       // Ensure offset is a valid integer and greater than 0
       let offsetNumber = parseInt(offset, 10);
-      
+
       // Ensure offset is an integer and fix floating point errors
       if (isNaN(offsetNumber) || offsetNumber <= 0) {
         offsetNumber = 50; // Fallback to default value if invalid
@@ -45,10 +45,17 @@ export async function GET(request: Request) {
       const pageNumber = parseInt(page, 10);
       const skip = (pageNumber - 1) * offsetNumber;
 
-      // Adjust this Cypher query to match your Neo4j schema
+      // Log the variables to check their values
+      console.log('Offset:', offsetNumber);
+      console.log('Page:', pageNumber);
+      console.log('Skip:', skip);
+      console.log('Limit:', offsetNumber);
+
+      // Adjust this Cypher query to match your Neo4j schema and the relationships
       const query = `
-        MATCH (tx:Transaction { address: $address })
-        RETURN tx
+        MATCH (tx:Transaction)-[:SENT_TO|:RECEIVED_FROM]->(node:Node)
+        WHERE node.addressId = $address
+        RETURN tx, node
         SKIP $skip
         LIMIT $limit
       `;
