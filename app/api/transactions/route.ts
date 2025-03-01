@@ -83,7 +83,7 @@ export async function GET(request: Request) {
            LIMIT $limit`,
           { address: address.toLowerCase(), skip: neo4j.int(skip), limit: neo4j.int(safeLimit) }
         );
-        console.log("Neo4j Nodes Found:", result.records.length);
+        console.log("Neo4j Raw Result:", result.records); // Log raw Neo4j results
         return result;
       });
 
@@ -109,6 +109,9 @@ export async function GET(request: Request) {
           },
         };
       });
+
+      // Debug the transactions array
+      console.log("Transactions Array:", transactions); // Log final transactions array
 
       // Handle empty transactions array case
       if (!Array.isArray(transactions) || transactions.length === 0) {
