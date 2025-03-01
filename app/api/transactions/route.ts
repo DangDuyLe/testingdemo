@@ -28,20 +28,24 @@ export async function GET(request: Request) {
   }
 
   // Ensure that page and offset are integers and remove any decimals
-  const pageNumber = Math.floor(parseInt(page, 10));  // Ensure it's an integer
-  const offsetNumber = Math.floor(parseInt(offset, 10));  // Ensure it's an integer
+  const pageNumber = parseInt(page, 10);
+  const offsetNumber = parseInt(offset, 10);
 
+  // Check if parsing resulted in valid integers
   if (isNaN(pageNumber) || isNaN(offsetNumber)) {
     return NextResponse.json({ error: "Invalid page or offset value" }, { status: 400 });
   }
 
+  // Ensure that both pageNumber and offsetNumber are integers (no decimals)
+  const limit = Math.floor(offsetNumber); // Ensure it's a non-negative integer
+  const skip = Math.floor((pageNumber - 1) * limit); // Ensure skip is also a non-negative integer
+
   // Log that we are fetching data from the Neo4j database
   console.log("Fetching data from Neo4j database for address:", address);
+  console.log("Using limit:", limit, "skip:", skip);
 
   const session = driver.session();
   try {
-    const skip = (pageNumber - 1) * offsetNumber;
-
     // Adjust this Cypher query to match your Neo4j schema
     const query = `
       MATCH (tx:Transaction { address: $address })
@@ -52,7 +56,7 @@ export async function GET(request: Request) {
     const result = await session.run(query, {
       address,
       skip,
-      limit: offsetNumber,  // Ensure limit is an integer
+      limit,
     });
 
     // Convert Neo4j records to plain objects
