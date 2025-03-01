@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2} from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 // Dynamically import ForceGraph2D (without generic type arguments)
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
@@ -62,6 +62,8 @@ export default function TransactionGraph() {
     if (address) {
       setLoading(true);
       setError(null);
+
+      // Fetch transactions with the given offset
       fetch(`/api/transactions?address=${address}&offset=100`)
         .then((res) => res.json())
         .then((data: unknown) => {
@@ -72,6 +74,7 @@ export default function TransactionGraph() {
           const nodes = new Map<string, GraphNode>();
           const links: GraphData["links"] = [];
 
+          // Process the transactions to generate nodes and links
           transactions.forEach((tx) => {
             if (!nodes.has(tx.from)) {
               const name = getNameForAddress(tx.from);
@@ -98,6 +101,7 @@ export default function TransactionGraph() {
             });
           });
 
+          // Set the graph data for rendering
           setGraphData({
             nodes: Array.from(nodes.values()),
             links,
@@ -111,7 +115,7 @@ export default function TransactionGraph() {
     }
   }, [address]);
 
-  // Update onNodeClick to accept both the node and the MouseEvent.
+  // Handle click event on a node
   const handleNodeClick = useCallback(
     (node: { [others: string]: any }, event: MouseEvent) => {
       const n = node as GraphNode;
@@ -132,6 +136,7 @@ export default function TransactionGraph() {
         }
         return node;
       });
+
       if (JSON.stringify(updatedNodes) !== JSON.stringify(graphData.nodes)) {
         // Use the existing graphData rather than a functional update.
         setGraphData({
@@ -142,6 +147,7 @@ export default function TransactionGraph() {
     }
   }, [graphData]);
 
+  // Render loading state
   if (loading) {
     return (
       <Card className="h-[500px] flex items-center justify-center">
@@ -150,6 +156,7 @@ export default function TransactionGraph() {
     );
   }
 
+  // Render error state
   if (error) {
     return (
       <Card className="h-[500px]">
@@ -160,6 +167,7 @@ export default function TransactionGraph() {
     );
   }
 
+  // Render the graph when data is available
   if (!graphData) {
     return null;
   }
@@ -174,27 +182,25 @@ export default function TransactionGraph() {
           graphData={graphData}
           nodeLabel={((node: GraphNode) => node.id) as any}
           nodeColor={((node: GraphNode) => node.color) as any}
-          nodeCanvasObject={
-            ((node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
-              if (node.x == null || node.y == null) return;
-              const { label, type, x, y } = node;
-              const fontSize = 4;
-              ctx.font = `${fontSize}px Sans-Serif`;
-              ctx.textAlign = "center";
-              ctx.textBaseline = "middle";
-              ctx.beginPath();
-              ctx.arc(x, y, type === "both" ? 4 : 3, 0, 2 * Math.PI, false);
-              ctx.fillStyle =
-                type === "in"
-                  ? "rgba(0, 255, 0, 0.5)"
-                  : type === "out"
-                  ? "rgba(255, 0, 0, 0.5)"
-                  : "rgba(255, 255, 0, 0.5)";
-              ctx.fill();
-              ctx.fillStyle = "white";
-              ctx.fillText(label, x, y);
-            }) as any
-          }
+          nodeCanvasObject={((node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
+            if (node.x == null || node.y == null) return;
+            const { label, type, x, y } = node;
+            const fontSize = 4;
+            ctx.font = `${fontSize}px Sans-Serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.beginPath();
+            ctx.arc(x, y, type === "both" ? 4 : 3, 0, 2 * Math.PI, false);
+            ctx.fillStyle =
+              type === "in"
+                ? "rgba(0, 255, 0, 0.5)"
+                : type === "out"
+                ? "rgba(255, 0, 0, 0.5)"
+                : "rgba(255, 255, 0, 0.5)";
+            ctx.fill();
+            ctx.fillStyle = "white";
+            ctx.fillText(label, x, y);
+          }) as any}
           nodeRelSize={6}
           linkWidth={1}
           linkColor={() => "rgb(255, 255, 255)"}
