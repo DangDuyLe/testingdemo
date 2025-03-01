@@ -27,13 +27,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Address is required" }, { status: 400 });
   }
 
+  // Ensure that page and offset are integers
+  const pageNumber = parseInt(page, 10);
+  const offsetNumber = parseInt(offset, 10);
+
+  if (isNaN(pageNumber) || isNaN(offsetNumber)) {
+    return NextResponse.json({ error: "Invalid page or offset value" }, { status: 400 });
+  }
+
   // Log that we are fetching data from the Neo4j database
   console.log("Fetching data from Neo4j database for address:", address);
 
   const session = driver.session();
   try {
-    const offsetNumber = parseInt(offset, 10);
-    const pageNumber = parseInt(page, 10);
     const skip = (pageNumber - 1) * offsetNumber;
 
     // Adjust this Cypher query to match your Neo4j schema
@@ -46,7 +52,7 @@ export async function GET(request: Request) {
     const result = await session.run(query, {
       address,
       skip,
-      limit: offsetNumber,
+      limit: offsetNumber,  // Ensure limit is an integer
     });
 
     // Convert Neo4j records to plain objects
