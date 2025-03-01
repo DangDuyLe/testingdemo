@@ -36,7 +36,7 @@ interface GraphNode {
 // Define the structure of graph data
 interface GraphData {
   nodes: GraphNode[];
-  links: { source: string; target: string; value: number }[];
+  links: { source: string | number; target: string | number; value: number }[];
 }
 
 // Define the structure of the API response
@@ -92,7 +92,7 @@ export default function TransactionGraph() {
         }
 
         const transactions = response.transactions;
-        const nodes = new Map<string, GraphNode>();
+        const nodes = new Map<string | number, GraphNode>();
         const links: GraphData["links"] = [];
 
         // Process transactions to create nodes and links

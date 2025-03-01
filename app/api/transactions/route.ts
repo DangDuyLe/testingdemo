@@ -75,20 +75,18 @@ export async function GET(request: Request) {
     const session = driver.session();
     try {
       // Execute the Cypher query
-      const result = await session.executeRead(async (tx) => {
-        return tx.run(
-          `MATCH (wallet)-[tx:Transfer]-(other)
-           WHERE wallet.addressId = $address
-           RETURN wallet, tx, other
-           SKIP $skip
-           LIMIT $limit`,
-          {
-            address,
-            skip: neo4j.int(skip), // Convert to Neo4j integer
-            limit: neo4j.int(safeLimit), // Convert to Neo4j integer
-          }
-        );
-      });
+// Add this to debug Neo4j results
+const result = await session.executeRead(async (tx) => {
+  const result = await tx.run(
+    `MATCH (wallet {addressId: $address})-[tx:Transfer]->(other)
+     RETURN wallet, tx, other
+     SKIP $skip
+     LIMIT $limit`,
+    { address: address.toLowerCase(), skip: neo4j.int(skip), limit: neo4j.int(safeLimit) }
+  );
+  console.log("Neo4j Nodes Found:", result.records.length);
+  return result;
+});
 
       // Process and convert Neo4j records to plain JavaScript objects
       const transactions = result.records.map((record) => {
