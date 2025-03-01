@@ -3,18 +3,18 @@ import neo4j, { Integer } from "neo4j-driver";
 
 // Log Neo4j environment variables (for debugging)
 console.log("NEO4J_URI:", process.env.NEO4J_URI?.slice(0, 20) + "...");
-console.log("NEO4J_USERNAME:", process.env.NEO4J_USERNAME);
+console.log("NEO4J_USER:", process.env.NEO4J_USER);
 console.log("NEO4J_PASSWORD:", process.env.NEO4J_PASSWORD ? "***" : "missing");
 
 // Validate environment variables
-if (!process.env.NEO4J_URI || !process.env.NEO4J_USERNAME || !process.env.NEO4J_PASSWORD) {
+if (!process.env.NEO4J_URI || !process.env.NEO4J_USER || !process.env.NEO4J_PASSWORD) {
   throw new Error("Missing Neo4j environment configuration");
 }
 
 // Initialize Neo4j driver with connection pooling
 const driver = neo4j.driver(
   process.env.NEO4J_URI,
-  neo4j.auth.basic(process.env.NEO4J_USERNAME, process.env.NEO4J_PASSWORD),
+  neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASSWORD),
   { disableLosslessIntegers: true } // Safely handle large numbers
 );
 
