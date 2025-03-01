@@ -62,7 +62,7 @@ export async function GET(request: Request) {
       const result = await session.run(query, {
         address,
         skip,
-        limit: offsetNumber,
+        limit: offsetNumber, // Make sure the limit is an integer here
       });
 
       // Convert Neo4j records to plain objects
