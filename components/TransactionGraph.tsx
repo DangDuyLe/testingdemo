@@ -6,9 +6,10 @@ import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 
-// Dynamically import ForceGraph2D (without generic type arguments)
+// Dynamically import ForceGraph2D
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
 
+// Define the structure of a transaction
 interface Transaction {
   id: string;
   from: string;
@@ -17,39 +18,53 @@ interface Transaction {
   timestamp: string;
 }
 
-// Define our node type with our custom properties.
-export interface GraphNode {
-  id: string;
+// Define the structure of a graph node
+interface GraphNode {
+  id: string | number;
   label: string;
   color: string;
-  type: string;
+  type: "in" | "out" | "both";
   x?: number;
   y?: number;
   vx?: number;
   vy?: number;
   fx?: number;
   fy?: number;
+  [others: string]: any; // Allow additional properties
 }
 
+// Define the structure of graph data
 interface GraphData {
   nodes: GraphNode[];
   links: { source: string; target: string; value: number }[];
 }
 
-const getRandomColor = () => `#${Math.floor(Math.random() * 16777215).toString(16)}`;
-
-function shortenAddress(address: string): string {
-  return `${address.slice(0, 3)}...${address.slice(-2)}`;
+// Define the structure of the API response
+interface ApiResponse {
+  success: boolean;
+  address: string;
+  page: number;
+  limit: number;
+  total: number;
+  transactions: Transaction[];
+  error?: string;
 }
 
-// A mock function to get a name for an address (replace with your actual logic)
-function getNameForAddress(address: string): string | null {
-  const mockNames: { [key: string]: string } = {
+// Utility to generate a random color
+const getRandomColor = () => `#${Math.floor(Math.random() * 16777215).toString(16)}`;
+
+// Utility to shorten an Ethereum address
+const shortenAddress = (address: string): string =>
+  address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Invalid";
+
+// Mock function to get a name for an address
+const getNameForAddress = (address: string): string | null => {
+  const mockNames: Record<string, string> = {
     "0x1234567890123456789012345678901234567890": "Alice",
     "0x0987654321098765432109876543210987654321": "Bob",
   };
   return mockNames[address] || null;
-}
+};
 
 export default function TransactionGraph() {
   const searchParams = useSearchParams();
@@ -58,92 +73,84 @@ export default function TransactionGraph() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch transaction data
   useEffect(() => {
-    if (address) {
-      setLoading(true);
-      setError(null);
+    if (!address) return;
 
-      // Fetch transactions with the given offset
-      fetch(`/api/transactions?address=${address}&offset=${Number(50)}`)
-      .then((res) => res.json())
-        .then((data: unknown) => {
-          if (!Array.isArray(data)) {
-            throw new Error((data as any).error || "Unexpected API response");
-          }
-          const transactions = data as Transaction[];
-          const nodes = new Map<string, GraphNode>();
-          const links: GraphData["links"] = [];
+    setLoading(true);
+    setError(null);
 
-          // Process the transactions to generate nodes and links
-          transactions.forEach((tx) => {
-            if (!nodes.has(tx.from)) {
-              const name = getNameForAddress(tx.from);
-              nodes.set(tx.from, {
-                id: tx.from,
-                label: name || shortenAddress(tx.from),
-                color: getRandomColor(),
-                type: tx.from === address ? "out" : "in",
-              });
-            }
-            if (!nodes.has(tx.to)) {
-              const name = getNameForAddress(tx.to);
-              nodes.set(tx.to, {
-                id: tx.to,
-                label: name || shortenAddress(tx.to),
-                color: getRandomColor(),
-                type: tx.to === address ? "in" : "out",
-              });
-            }
+    fetch(`/api/transactions?address=${address}&limit=50`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then((response: ApiResponse) => {
+        // Validate API response
+        if (!response?.success || !Array.isArray(response.transactions)) {
+          throw new Error(response?.error || "Invalid transaction data");
+        }
+
+        const transactions = response.transactions;
+        const nodes = new Map<string, GraphNode>();
+        const links: GraphData["links"] = [];
+
+        // Process transactions to create nodes and links
+        transactions.forEach((tx) => {
+          if (tx.from && tx.to) {
+            [tx.from, tx.to].forEach((addr) => {
+              if (addr && !nodes.has(addr)) {
+                const name = getNameForAddress(addr);
+                nodes.set(addr, {
+                  id: addr,
+                  label: name || shortenAddress(addr),
+                  color: getRandomColor(),
+                  type: addr === address ? "out" : "in",
+                });
+              }
+            });
+
             links.push({
               source: tx.from,
               target: tx.to,
               value: Number.parseFloat(tx.value),
             });
-          });
+          }
+        });
 
-          // Set the graph data for rendering
-          setGraphData({
-            nodes: Array.from(nodes.values()),
-            links,
-          });
-        })
-        .catch((err) => {
-          console.error("Error fetching transaction data for graph:", err);
-          setError(err.message || "Failed to fetch transaction data for graph");
-        })
-        .finally(() => setLoading(false));
-    }
+        setGraphData({ nodes: Array.from(nodes.values()), links });
+      })
+      .catch((err) => {
+        console.error("Fetch error:", err);
+        setError(err.message);
+      })
+      .finally(() => setLoading(false));
   }, [address]);
 
-  // Handle click event on a node
+  // Handle node clicks
   const handleNodeClick = useCallback(
-    (node: { [others: string]: any }, event: MouseEvent) => {
-      const n = node as GraphNode;
-      window.open(`https://etherscan.io/address/${n.id}`, "_blank");
+    (node: { id?: string | number; [others: string]: any }, event: MouseEvent) => {
+      const nodeId = node.id;
+      if (typeof nodeId === "string") {
+        window.open(`https://etherscan.io/address/${nodeId}`, "_blank");
+      }
     },
     []
   );
 
-  // Update nodes to reflect their transaction type ("both" if a node has both incoming and outgoing links)
+  // Update node types based on transaction directions
   useEffect(() => {
     if (graphData) {
-      const updatedNodes: GraphNode[] = graphData.nodes.map((node) => {
-        const incoming = graphData.links.filter(link => link.target === node.id);
-        const outgoing = graphData.links.filter(link => link.source === node.id);
-        if (incoming.length > 0 && outgoing.length > 0) {
-          // Explicitly assert that the type is the literal "both"
-          return { ...node, type: "both" as "both" };
-        }
-        return node;
+      const updatedNodes = graphData.nodes.map((node) => {
+        const incoming = graphData.links.filter((link) => link.target === node.id);
+        const outgoing = graphData.links.filter((link) => link.source === node.id);
+        return {
+          ...node,
+          type: incoming.length > 0 && outgoing.length > 0 ? "both" : node.type,
+        };
       });
 
-      if (JSON.stringify(updatedNodes) !== JSON.stringify(graphData.nodes)) {
-        // Use the existing graphData rather than a functional update.
-        setGraphData({
-          ...graphData,
-          nodes: updatedNodes,
-        });
-      }
+      setGraphData({ ...graphData, nodes: updatedNodes });
     }
   }, [graphData]);
 
@@ -159,19 +166,26 @@ export default function TransactionGraph() {
   // Render error state
   if (error) {
     return (
-      <Card className="h-[500px]">
-        <CardContent className="h-full flex items-center justify-center">
+      <Card className="h-[500px] flex items-center justify-center">
+        <CardContent>
           <p className="text-center text-red-500">Error: {error}</p>
         </CardContent>
       </Card>
     );
   }
 
-  // Render the graph when data is available
-  if (!graphData) {
-    return null;
+  // Render empty state
+  if (!graphData || graphData.nodes.length === 0) {
+    return (
+      <Card className="h-[500px] flex items-center justify-center">
+        <CardContent>
+          <p className="text-center">No transactions found for this address</p>
+        </CardContent>
+      </Card>
+    );
   }
 
+  // Render the graph
   return (
     <Card className="h-[540px] bg-gray-900">
       <CardHeader>
@@ -180,17 +194,16 @@ export default function TransactionGraph() {
       <CardContent className="h-[calc(100%-60px)]">
         <ForceGraph2D
           graphData={graphData}
-          nodeLabel={((node: GraphNode) => node.id) as any}
-          nodeColor={((node: GraphNode) => node.color) as any}
-          nodeCanvasObject={((node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
-            if (node.x == null || node.y == null) return;
-            const { label, type, x, y } = node;
-            const fontSize = 4;
+          nodeLabel="label"
+          nodeColor="color"
+          nodeCanvasObject={(node, ctx, globalScale) => {
+            const { label, type, x = 0, y = 0 } = node as GraphNode;
+            const fontSize = 12 / globalScale;
             ctx.font = `${fontSize}px Sans-Serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.beginPath();
-            ctx.arc(x, y, type === "both" ? 4 : 3, 0, 2 * Math.PI, false);
+            ctx.arc(x, y, type === "both" ? 6 : 4, 0, 2 * Math.PI, false);
             ctx.fillStyle =
               type === "in"
                 ? "rgba(0, 255, 0, 0.5)"
@@ -200,12 +213,12 @@ export default function TransactionGraph() {
             ctx.fill();
             ctx.fillStyle = "white";
             ctx.fillText(label, x, y);
-          }) as any}
+          }}
           nodeRelSize={6}
           linkWidth={1}
-          linkColor={() => "rgb(255, 255, 255)"}
+          linkColor="rgba(255, 255, 255, 0.2)"
           linkDirectionalParticles={2}
-          linkDirectionalParticleWidth={3}
+          linkDirectionalParticleWidth={2}
           linkDirectionalParticleSpeed={0.005}
           d3VelocityDecay={0.3}
           d3AlphaDecay={0.01}

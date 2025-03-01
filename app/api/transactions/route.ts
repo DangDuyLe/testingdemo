@@ -29,6 +29,21 @@ const neo4jNumberToJS = (value: any): number => {
   return Number(value) || 0; // Fallback for invalid values
 };
 
+// Define the response structure
+interface TransactionResponse {
+  success: boolean;
+  error?: string;
+  address: string;
+  page: number;
+  limit: number;
+  total: number;
+  transactions: Array<{
+    wallet: Record<string, any>;
+    transaction: Record<string, any>;
+    counterparty: Record<string, any>;
+  }>;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -38,8 +53,16 @@ export async function GET(request: Request) {
 
     // Validate Ethereum address format
     if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
-      return NextResponse.json(
-        { error: "Valid Ethereum address required" },
+      return NextResponse.json<TransactionResponse>(
+        {
+          success: false,
+          error: "Valid Ethereum address required",
+          address: address || "",
+          page: 0,
+          limit: 0,
+          total: 0,
+          transactions: [],
+        },
         { status: 400 }
       );
     }
@@ -91,7 +114,8 @@ export async function GET(request: Request) {
       });
 
       // Return the response with pagination metadata
-      return NextResponse.json({
+      return NextResponse.json<TransactionResponse>({
+        success: true,
         address,
         page: safePage,
         limit: safeLimit,
@@ -103,8 +127,16 @@ export async function GET(request: Request) {
     }
   } catch (error) {
     console.error("API Error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Server error" },
+    return NextResponse.json<TransactionResponse>(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Server error",
+        address: "",
+        page: 0,
+        limit: 0,
+        total: 0,
+        transactions: [],
+      },
       { status: 500 }
     );
   }
