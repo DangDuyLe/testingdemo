@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import neo4j from "neo4j-driver";
 
-const ETHERSCAN_API_URL = "https://api.etherscan.io/api";
-
 // Log Neo4j environment variables (for debugging purposes only)
 console.log("Loaded NEO4J_URI:", process.env.NEO4J_URI);
 console.log("Loaded NEO4J_USERNAME:", process.env.NEO4J_USERNAME);
@@ -29,48 +27,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Address is required" }, { status: 400 });
   }
 
-  // Log ETHERSCAN_API_KEY to verify it's loaded (remove after debugging)
-  console.log("Loaded ETHERSCAN_API_KEY:", process.env.ETHERSCAN_API_KEY);
-
   try {
-    // 1) Attempt to fetch transactions from Etherscan
-    const response = await fetch(
-      `${ETHERSCAN_API_URL}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${offset}&sort=desc&apikey=${process.env.ETHERSCAN_API_KEY}`
-    );
-
-    // Read raw text to check for an HTML error page
-    const rawText = await response.text();
-    console.log("Raw Etherscan response:", rawText);
-
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (parseError) {
-      throw new Error("Failed to parse JSON from Etherscan. Raw response: " + rawText);
-    }
-
-    // Etherscan returns status "1" when successful
-    if (data.status !== "1" || !Array.isArray(data.result) || data.result.length === 0) {
-      throw new Error("Etherscan returned no data or an error: " + (data.message || "unknown error"));
-    }
-
-    // Map Etherscan data to your transaction shape
-    const transactions = data.result.map((tx: any) => ({
-      id: tx.hash,
-      from: tx.from,
-      to: tx.to,
-      value: `${(Number(tx.value) / 1e18).toFixed(4)} ETH`,
-      timestamp: new Date(Number(tx.timeStamp) * 1000).toISOString(),
-    }));
-
-    // Log that the data was fetched from the API
-    console.log("Data loaded from Etherscan API");
-
-    return NextResponse.json(transactions);
-  } catch (error) {
-    console.error("Etherscan call failed; falling back to Neo4j:", error);
-
-    // 2) Fallback: query Neo4j if Etherscan fails or returns no valid data
+    // 1) Directly fallback to Neo4j query (no Etherscan API call)
     const session = driver.session();
     try {
       const offsetNumber = parseInt(offset, 10);
@@ -106,5 +64,11 @@ export async function GET(request: Request) {
     } finally {
       await session.close();
     }
+  } catch (error) {
+    console.error("Neo4j call failed:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }
