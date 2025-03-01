@@ -45,19 +45,15 @@ export async function GET(request: Request) {
       const pageNumber = parseInt(page, 10);
       const skip = (pageNumber - 1) * offsetNumber;
 
-      // Log the variables to check their values
-      console.log('Offset:', offsetNumber);
-      console.log('Page:', pageNumber);
-      console.log('Skip:', skip);
-      console.log('Limit:', offsetNumber);
+      
 
       // Adjust this Cypher query to match your Neo4j schema and the relationships
       const query = `
-        MATCH (tx:Transaction)-[:SENT_TO|:RECEIVED_FROM]->(node:Node)
-        WHERE node.addressId = $address
-        RETURN tx, node
-        SKIP $skip
-        LIMIT $limit
+        MATCH (wallet)-[tx:Transfer]-(other)
+        WHERE wallet.addressId = $address
+        RETURN wallet, tx, other
+        SKIP 0
+        LIMIT 25
       `;
       const result = await session.run(query, {
         address,
