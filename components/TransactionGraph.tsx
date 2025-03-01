@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 
-// Dynamically import ForceGraph2D
+// Dynamically import ForceGraph2D for rendering the graph
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
 
 // Define the structure of a transaction
@@ -30,13 +30,13 @@ interface GraphNode {
   vy?: number;
   fx?: number;
   fy?: number;
-  [others: string]: any; // Allow additional properties
+  [others: string]: any;
 }
 
 // Define the structure of graph data
 interface GraphData {
   nodes: GraphNode[];
-  links: { source: string | number; target: string | number; value: number }[];
+  links: { source: string; target: string; value: number }[];
 }
 
 // Define the structure of the API response
@@ -86,18 +86,18 @@ export default function TransactionGraph() {
         return res.json();
       })
       .then((response: ApiResponse) => {
-        // Validate API response
+        // Validate API response and ensure transactions is an array
         if (!response?.success || !Array.isArray(response.transactions)) {
           throw new Error(response?.error || "Invalid transaction data");
         }
 
-        const transactions = response.transactions;
-        const nodes = new Map<string | number, GraphNode>();
+        const transactions = response.transactions || [];
+        const nodes = new Map<string, GraphNode>();
         const links: GraphData["links"] = [];
 
         // Process transactions to create nodes and links
         transactions.forEach((tx) => {
-          if (tx.from && tx.to) {
+          if (tx?.from && tx?.to) {
             [tx.from, tx.to].forEach((addr) => {
               if (addr && !nodes.has(addr)) {
                 const name = getNameForAddress(addr);
@@ -127,9 +127,9 @@ export default function TransactionGraph() {
       .finally(() => setLoading(false));
   }, [address]);
 
-  // Handle node clicks
+  // Handle node clicks to open address in Etherscan
   const handleNodeClick = useCallback(
-    (node: { id?: string | number; [others: string]: any }, event: MouseEvent) => {
+    (node: { id?: string | number; [others: string]: any }) => {
       const nodeId = node.id;
       if (typeof nodeId === "string") {
         window.open(`https://etherscan.io/address/${nodeId}`, "_blank");
