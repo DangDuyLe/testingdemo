@@ -75,18 +75,17 @@ export async function GET(request: Request) {
     const session = driver.session();
     try {
       // Execute the Cypher query
-// Add this to debug Neo4j results
-const result = await session.executeRead(async (tx) => {
-  const result = await tx.run(
-    `MATCH (wallet {addressId: $address})-[tx:Transfer]->(other)
-     RETURN wallet, tx, other
-     SKIP $skip
-     LIMIT $limit`,
-    { address: address.toLowerCase(), skip: neo4j.int(skip), limit: neo4j.int(safeLimit) }
-  );
-  console.log("Neo4j Nodes Found:", result.records.length);
-  return result;
-});
+      const result = await session.executeRead(async (tx) => {
+        const result = await tx.run(
+          `MATCH (wallet {addressId: $address})-[tx:Transfer]->(other)
+           RETURN wallet, tx, other
+           SKIP $skip
+           LIMIT $limit`,
+          { address: address.toLowerCase(), skip: neo4j.int(skip), limit: neo4j.int(safeLimit) }
+        );
+        console.log("Neo4j Nodes Found:", result.records.length);
+        return result;
+      });
 
       // Process and convert Neo4j records to plain JavaScript objects
       const transactions = result.records.map((record) => {
@@ -110,6 +109,19 @@ const result = await session.executeRead(async (tx) => {
           },
         };
       });
+
+      // Handle empty transactions array case
+      if (!Array.isArray(transactions) || transactions.length === 0) {
+        return NextResponse.json<TransactionResponse>({
+          success: false,
+          error: "No transactions found for this address",
+          address,
+          page: safePage,
+          limit: safeLimit,
+          total: 0,
+          transactions: [],
+        });
+      }
 
       // Return the response with pagination metadata
       return NextResponse.json<TransactionResponse>({
