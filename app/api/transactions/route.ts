@@ -63,6 +63,9 @@ export async function GET(request: Request) {
       timestamp: new Date(Number(tx.timeStamp) * 1000).toISOString(),
     }));
 
+    // Log that the data was fetched from the API
+    console.log("Data loaded from Etherscan API");
+
     return NextResponse.json(transactions);
   } catch (error) {
     console.error("Etherscan call failed; falling back to Neo4j:", error);
@@ -89,6 +92,10 @@ export async function GET(request: Request) {
 
       // Convert Neo4j records to plain objects
       const neo4jTransactions = result.records.map((r) => r.get("tx").properties);
+
+      // Log that the data was fetched from the Neo4j database
+      console.log("Data loaded from Neo4j database");
+
       return NextResponse.json(neo4jTransactions);
     } catch (neo4jError) {
       console.error("Neo4j fallback failed:", neo4jError);
