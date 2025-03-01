@@ -1,73 +1,78 @@
 import { NextResponse } from "next/server";
 import neo4j from "neo4j-driver";
 
-// Log Neo4j environment variables (for debugging purposes only)
-console.log("Loaded NEO4J_URI:", process.env.NEO4J_URI);
-console.log("Loaded NEO4J_USERNAME:", process.env.NEO4J_USERNAME);
-console.log("Loaded NEO4J_PASSWORD:", process.env.NEO4J_PASSWORD);
+// Log Neo4j environment variables (for debugging)
+console.log("NEO4J_URI:", process.env.NEO4J_URI?.slice(0, 20) + "...");
+console.log("NEO4J_USERNAME:", process.env.NEO4J_USERNAME);
+console.log("NEO4J_PASSWORD:", process.env.NEO4J_PASSWORD ? "***" : "missing");
 
-// Ensure all required Neo4j environment variables are present
+// Validate environment variables
 if (!process.env.NEO4J_URI || !process.env.NEO4J_USERNAME || !process.env.NEO4J_PASSWORD) {
-  throw new Error("Missing one or more required Neo4j environment variables (NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD)");
+  throw new Error("Missing Neo4j environment configuration");
 }
 
-// Initialize the Neo4j driver using the correct environment variables
+// Initialize driver with connection pool
 const driver = neo4j.driver(
   process.env.NEO4J_URI,
-  neo4j.auth.basic(process.env.NEO4J_USERNAME, process.env.NEO4J_PASSWORD)
+  neo4j.auth.basic(process.env.NEO4J_USERNAME, process.env.NEO4J_PASSWORD),
+  { disableLosslessIntegers: true } // Handle big numbers safely
 );
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const address = searchParams.get("address");
-    const page = searchParams.get("page") || "1";
-    const offset = searchParams.get("offset") || "50";
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "50", 10);
 
-    if (!address) {
-      return NextResponse.json({ error: "Address is required" }, { status: 400 });
+    // Validate address format
+    if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      return NextResponse.json(
+        { error: "Valid Ethereum address required" },
+        { status: 400 }
+      );
     }
+
+    // Sanitize pagination parameters
+    const safePage = Math.max(1, isNaN(page) ? 1 : page);
+    const safeLimit = Math.min(Math.max(1, isNaN(limit) ? 50 : limit), 100);
+    const skip = (safePage - 1) * safeLimit;
 
     const session = driver.session();
     try {
-      // Parse and validate offset
-      let offsetNumber = parseInt(offset, 10);
-      if (isNaN(offsetNumber) || offsetNumber <= 0) {
-        offsetNumber = 50;
-      }
-      offsetNumber = Math.floor(offsetNumber);
-
-      // Parse page and calculate skip
-      const pageNumber = parseInt(page, 10);
-      const skip = (pageNumber - 1) * offsetNumber;
-
-      // Cypher query
-      const query = `
-        MATCH (wallet)-[tx:Transfer]-(other)
-        WHERE wallet.addressId = $address
-        RETURN wallet, tx, other
-        SKIP $skip
-        LIMIT $limit
-      `;
-
-      // Execute query
-      const result = await session.run(query, {
-        address,
-        skip: neo4j.int(skip),
-        limit: neo4j.int(offsetNumber)
+      const result = await session.executeRead(async tx => {
+        return tx.run(
+          `MATCH (wallet)-[tx:Transfer]-(other)
+           WHERE wallet.addressId = $address
+           RETURN wallet, tx, other
+           SKIP $skip
+           LIMIT $limit`,
+          {
+            address,
+            skip: neo4j.int(skip),
+            limit: neo4j.int(safeLimit)
+          }
+        );
       });
 
-      // Convert records to plain objects
-      const neo4jTransactions = result.records.map((r) => r.get("tx").properties);
-      console.log("Data loaded from Neo4j database");
+      // Convert Neo4j types to plain JS objects
+      const transactions = result.records.map(record => ({
+        wallet: record.get("wallet").properties,
+        transaction: {
+          ...record.get("tx").properties,
+          // Convert Neo4j Integer to JS number
+          value: record.get("tx").properties.value.toNumber()
+        },
+        counterparty: record.get("other").properties
+      }));
 
-      return NextResponse.json(neo4jTransactions);
-    } catch (neo4jError) {
-      console.error("Neo4j operation failed:", neo4jError);
-      return NextResponse.json(
-        { error: neo4jError instanceof Error ? neo4jError.message : "Database error" },
-        { status: 500 }
-      );
+      return NextResponse.json({
+        address,
+        page: safePage,
+        limit: safeLimit,
+        total: transactions.length,
+        transactions
+      });
     } finally {
       await session.close();
     }
