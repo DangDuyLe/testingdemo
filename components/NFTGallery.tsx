@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 import Image from "next/image"
+import { NFTGalleryProps } from '@/lib/types'
 
 interface NFT {
   tokenID: string
@@ -13,7 +14,7 @@ interface NFT {
   contractAddress: string
 }
 
-export default function NFTGallery() {
+export default function NFTGallery({ data }: NFTGalleryProps) {
   const searchParams = useSearchParams()
   const address = searchParams.get("address")
   const [nfts, setNFTs] = useState<NFT[]>([])

@@ -55,3 +55,34 @@ export async function initializeDriver(): Promise<void> {
     throw error
   }
 }
+
+// Thêm retry logic
+export async function runQueryWithRetry(
+  cypher: string,
+  params = {},
+  maxRetries = 3
+) {
+  let lastError
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const session = getDriver().session()
+      try {
+        const result = await session.run(cypher, params)
+        return result.records
+      } finally {
+        await session.close()
+      }
+    } catch (error) {
+      console.error(`Attempt ${i + 1} failed:`, error)
+      lastError = error
+      
+      // Wait before retrying (exponential backoff)
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000))
+      }
+    }
+  }
+  
+  throw lastError
+}

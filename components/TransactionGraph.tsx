@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+import { TransactionGraphProps } from '@/lib/types'
 
 // Dynamically import ForceGraph2D
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
@@ -66,7 +67,7 @@ const getNameForAddress = (address: string): string | null => {
   return mockNames[address] || null;
 };
 
-export default function TransactionGraph() {
+export default function TransactionGraph({ data }: TransactionGraphProps) {
   const searchParams = useSearchParams();
   const address = searchParams.get("address");
   const [graphData, setGraphData] = useState<GraphData | null>(null);
