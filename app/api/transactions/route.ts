@@ -49,11 +49,11 @@ export async function GET(request: Request) {
 
       // Adjust this Cypher query to match your Neo4j schema and the relationships
       const query = `
-        MATCH (wallet)-[tx:Transfer]-(other)
-        WHERE wallet.addressId = $address
-        RETURN wallet, tx, other
-        SKIP 0
-        LIMIT 25
+     MATCH (wallet)-[tx:Transfer]-(other)
+WHERE wallet.addressId = $address
+RETURN wallet, tx, other
+SKIP $skip
+LIMIT $limit
       `;
       const result = await session.run(query, {
         address,
