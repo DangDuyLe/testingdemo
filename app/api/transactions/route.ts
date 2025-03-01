@@ -27,9 +27,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Address is required" }, { status: 400 });
   }
 
-  // Ensure that page and offset are integers
-  const pageNumber = parseInt(page, 10);
-  const offsetNumber = parseInt(offset, 10);
+  // Ensure that page and offset are integers and remove any decimals
+  const pageNumber = Math.floor(parseInt(page, 10));  // Ensure it's an integer
+  const offsetNumber = Math.floor(parseInt(offset, 10));  // Ensure it's an integer
 
   if (isNaN(pageNumber) || isNaN(offsetNumber)) {
     return NextResponse.json({ error: "Invalid page or offset value" }, { status: 400 });
