@@ -1,109 +1,61 @@
-import { NextResponse } from "next/server";
-import neo4j from "neo4j-driver";
+import { NextResponse } from "next/server"
 
-const ETHERSCAN_API_URL = "https://api.etherscan.io/api";
+const ETHERSCAN_API_URL = "https://api.etherscan.io/api"
 
-// Log Neo4j environment variables (for debugging purposes only)
-console.log("Loaded NEO4J_URI:", process.env.NEO4J_URI);
-console.log("Loaded NEO4J_USERNAME:", process.env.NEO4J_USERNAME);
-console.log("Loaded NEO4J_PASSWORD:", process.env.NEO4J_PASSWORD);
-
-// Ensure all required Neo4j environment variables are present
-if (!process.env.NEO4J_URI || !process.env.NEO4J_USERNAME || !process.env.NEO4J_PASSWORD) {
-  throw new Error("Missing one or more required Neo4j environment variables (NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD)");
+interface NFT {
+  tokenID: string
+  tokenName: string
+  tokenSymbol: string
+  contractAddress: string
 }
-
-// Initialize the Neo4j driver using the correct environment variables
-const driver = neo4j.driver(
-  process.env.NEO4J_URI,
-  neo4j.auth.basic(process.env.NEO4J_USERNAME, process.env.NEO4J_PASSWORD)
-);
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const address = searchParams.get("address");
-  const page = searchParams.get("page") || "1";
-  const offset = searchParams.get("offset") || "100";
+  const { searchParams } = new URL(request.url)
+  const address = searchParams.get("address")
 
   if (!address) {
-    return NextResponse.json({ error: "Address is required" }, { status: 400 });
+    return NextResponse.json({ error: "Address is required" }, { status: 400 })
   }
-
-  // Log ETHERSCAN_API_KEY to verify it's loaded (remove after debugging)
-  console.log("Loaded ETHERSCAN_API_KEY:", process.env.ETHERSCAN_API_KEY);
 
   try {
-    // 1) Attempt to fetch transactions from Etherscan with added headers
     const response = await fetch(
-      `${ETHERSCAN_API_URL}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${offset}&sort=desc&apikey=${process.env.ETHERSCAN_API_KEY}`,
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-          "Accept": "application/json,text/html,application/xhtml+xml"
-        }
+      `${ETHERSCAN_API_URL}?module=account&action=tokennfttx&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${process.env.ETHERSCAN_API_KEY}`,
+    )
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (data.status !== "1") {
+      // If no NFTs are found, return an empty array instead of throwing an error
+      if (data.message === "No transactions found") {
+        return NextResponse.json([])
       }
-    );
-
-    // Read raw text to check for an HTML error page
-    const rawText = await response.text();
-    console.log("Raw Etherscan response:", rawText);
-
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (parseError) {
-      throw new Error("Failed to parse JSON from Etherscan. Raw response: " + rawText);
+      throw new Error(data.message || "Etherscan API returned an error")
     }
 
-    // Etherscan returns status "1" when successful
-    if (data.status !== "1" || !Array.isArray(data.result) || data.result.length === 0) {
-      throw new Error("Etherscan returned no data or an error: " + (data.message || "unknown error"));
-    }
+    const nfts = data.result.reduce((acc: NFT[], tx: any) => {
+      const existingNFT = acc.find((nft) => nft.contractAddress === tx.contractAddress && nft.tokenID === tx.tokenID)
+      if (!existingNFT) {
+        acc.push({
+          tokenID: tx.tokenID,
+          tokenName: tx.tokenName,
+          tokenSymbol: tx.tokenSymbol,
+          contractAddress: tx.contractAddress,
+        })
+      }
+      return acc
+    }, [])
 
-    // Map Etherscan data to your transaction shape
-    const transactions = data.result.map((tx: any) => ({
-      id: tx.hash,
-      from: tx.from,
-      to: tx.to,
-      value: `${(Number(tx.value) / 1e18).toFixed(4)} ETH`,
-      timestamp: new Date(Number(tx.timeStamp) * 1000).toISOString(),
-    }));
-
-    return NextResponse.json(transactions);
+    return NextResponse.json(nfts)
   } catch (error) {
-    console.error("Etherscan call failed; falling back to Neo4j:", error);
-
-    // 2) Fallback: query Neo4j if Etherscan fails or returns no valid data
-    const session = driver.session();
-    try {
-      const offsetNumber = parseInt(offset, 10);
-      const pageNumber = parseInt(page, 10);
-      const skip = (pageNumber - 1) * offsetNumber;
-
-      // Adjust this Cypher query to match your Neo4j schema
-      const query = `
-        MATCH (tx:Transaction { address: $address })
-        RETURN tx
-        SKIP $skip
-        LIMIT $limit
-      `;
-      const result = await session.run(query, {
-        address,
-        skip,
-        limit: offsetNumber,
-      });
-
-      // Convert Neo4j records to plain objects
-      const neo4jTransactions = result.records.map((r) => r.get("tx").properties);
-      return NextResponse.json(neo4jTransactions);
-    } catch (neo4jError) {
-      console.error("Neo4j fallback failed:", neo4jError);
-      return NextResponse.json(
-        { error: neo4jError instanceof Error ? neo4jError.message : "Neo4j error" },
-        { status: 500 }
-      );
-    } finally {
-      await session.close();
-    }
+    console.error("Error fetching NFTs:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "An unknown error occurred" },
+      { status: 500 },
+    )
   }
 }
+

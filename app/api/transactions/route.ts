@@ -1,156 +1,47 @@
-import { NextResponse } from "next/server";
-import neo4j, { Integer } from "neo4j-driver";
+import { NextResponse } from "next/server"
 
-// Log Neo4j environment variables (for debugging)
-console.log("NEO4J_URI:", process.env.NEO4J_URI?.slice(0, 20) + "...");
-console.log("NEO4J_USERNAME:", process.env.NEO4J_USERNAME);
-console.log("NEO4J_PASSWORD:", process.env.NEO4J_PASSWORD ? "***" : "missing");
-
-// Validate environment variables
-if (!process.env.NEO4J_URI || !process.env.NEO4J_USERNAME || !process.env.NEO4J_PASSWORD) {
-  throw new Error("Missing Neo4j environment configuration");
-}
-
-// Initialize Neo4j driver with connection pooling
-const driver = neo4j.driver(
-  process.env.NEO4J_URI,
-  neo4j.auth.basic(process.env.NEO4J_USERNAME, process.env.NEO4J_PASSWORD),
-  { disableLosslessIntegers: true } // Safely handle large numbers
-);
-
-// Utility function to safely convert Neo4j numbers to JavaScript numbers
-const neo4jNumberToJS = (value: any): number => {
-  if (neo4j.isInt(value)) {
-    return value.toNumber(); // Convert Neo4j Integer to JS number
-  }
-  if (typeof value === "number") {
-    return value; // Already a JS number
-  }
-  return Number(value) || 0; // Fallback for invalid values
-};
-
-// Define the response structure
-interface TransactionResponse {
-  success: boolean;
-  error?: string;
-  address: string;
-  page: number;
-  limit: number;
-  total: number;
-  transactions: Array<{
-    wallet: Record<string, any>;
-    transaction: Record<string, any>;
-    counterparty: Record<string, any>;
-  }>;
-}
+const ETHERSCAN_API_URL = "https://api.etherscan.io/api"
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const address = searchParams.get("address")
+  const page = searchParams.get("page") || "1"
+  const offset = searchParams.get("offset") || "50" // Increased to 50 transactions
+
+  if (!address) {
+    return NextResponse.json({ error: "Address is required" }, { status: 400 })
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
-    const address = searchParams.get("address");
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const response = await fetch(
+      `${ETHERSCAN_API_URL}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${offset}&sort=desc&apikey=${process.env.ETHERSCAN_API_KEY}`,
+    )
 
-    // Validate Ethereum address format
-    if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
-      return NextResponse.json<TransactionResponse>(
-        {
-          success: false,
-          error: "Valid Ethereum address required",
-          address: address || "",
-          page: 0,
-          limit: 0,
-          total: 0,
-          transactions: [],
-        },
-        { status: 400 }
-      );
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    // Sanitize pagination parameters
-    const safePage = Math.max(1, isNaN(page) ? 1 : page); // Ensure page >= 1
-    const safeLimit = Math.min(Math.max(1, isNaN(limit) ? 50 : limit), 100); // Limit between 1 and 100
-    const skip = (safePage - 1) * safeLimit; // Calculate skip value
+    const data = await response.json()
 
-    const session = driver.session();
-    try {
-      // Execute the Cypher query
-      const result = await session.executeRead(async (tx) => {
-        const result = await tx.run(
-          `MATCH (wallet {addressId: $address})-[tx:Transfer]->(other)
-           RETURN wallet, tx, other
-           SKIP $skip
-           LIMIT $limit`,
-          { address: address.toLowerCase(), skip: neo4j.int(skip), limit: neo4j.int(safeLimit) }
-        );
-        console.log("Neo4j Raw Result:", result.records); // Log raw Neo4j results
-        return result;
-      });
-
-      // Process and convert Neo4j records to plain JavaScript objects
-      const transactions = result.records.map((record) => {
-        const wallet = record.get("wallet").properties;
-        const tx = record.get("tx").properties;
-        const other = record.get("other").properties;
-
-        return {
-          wallet: {
-            ...wallet,
-            // Convert any numeric wallet properties if needed
-          },
-          transaction: {
-            ...tx,
-            value: neo4jNumberToJS(tx.value), // Safely convert value
-            // Convert other numeric transaction properties if needed
-          },
-          counterparty: {
-            ...other,
-            // Convert any numeric counterparty properties if needed
-          },
-        };
-      });
-
-      // Debug the transactions array
-      console.log("Transactions Array:", transactions); // Log final transactions array
-
-      // Handle empty transactions array case
-      if (!Array.isArray(transactions) || transactions.length === 0) {
-        return NextResponse.json<TransactionResponse>({
-          success: false,
-          error: "No transactions found for this address",
-          address,
-          page: safePage,
-          limit: safeLimit,
-          total: 0,
-          transactions: [],
-        });
-      }
-
-      // Return the response with pagination metadata
-      return NextResponse.json<TransactionResponse>({
-        success: true,
-        address,
-        page: safePage,
-        limit: safeLimit,
-        total: transactions.length,
-        transactions,
-      });
-    } finally {
-      await session.close(); // Always close the session
+    if (data.status !== "1") {
+      throw new Error(data.message || "Etherscan API returned an error")
     }
+
+    const transactions = data.result.map((tx: any) => ({
+      id: tx.hash,
+      from: tx.from,
+      to: tx.to,
+      value: `${(Number.parseFloat(tx.value) / 1e18).toFixed(4)} ETH`,
+      timestamp: new Date(Number.parseInt(tx.timeStamp) * 1000).toISOString(),
+    }))
+
+    return NextResponse.json(transactions)
   } catch (error) {
-    console.error("API Error:", error);
-    return NextResponse.json<TransactionResponse>(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Server error",
-        address: "",
-        page: 0,
-        limit: 0,
-        total: 0,
-        transactions: [],
-      },
-      { status: 500 }
-    );
+    console.error("Error fetching transactions:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "An unknown error occurred" },
+      { status: 500 },
+    )
   }
 }
+

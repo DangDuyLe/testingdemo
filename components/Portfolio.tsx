@@ -5,7 +5,6 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 import { Coins } from "lucide-react"
-import { PortfolioProps } from '@/lib/types'
 
 interface TokenBalance {
   token: string
@@ -13,7 +12,7 @@ interface TokenBalance {
   usdValue: number
 }
 
-export default function Portfolio({ data }: PortfolioProps) {
+export default function Portfolio() {
   const searchParams = useSearchParams()
   const address = searchParams.get("address")
   const [portfolio, setPortfolio] = useState<TokenBalance[]>([])

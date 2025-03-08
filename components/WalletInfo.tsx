@@ -5,7 +5,6 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 import { Wallet, Coins, DollarSign, ListOrdered } from "lucide-react"
-import { WalletInfoProps } from '@/lib/types'
 
 interface WalletData {
   address: string
@@ -13,7 +12,7 @@ interface WalletData {
   transactionCount: number
 }
 
-export default function WalletInfo({ data }: WalletInfoProps) {
+export default function WalletInfo() {
   const searchParams = useSearchParams()
   const address = searchParams.get("address")
   const [walletData, setWalletData] = useState<WalletData | null>(null)
