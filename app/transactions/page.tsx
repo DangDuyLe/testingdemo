@@ -8,6 +8,7 @@ import ParticlesBackground from '@/components/ParticlesBackground';
 import RevenueGraph from '@/components/transactions/RevenueGraph';
 import { Skeleton } from "@/components/ui/skeleton"
 import WalletCharts from '@/components/transactions/WalletCharts';
+import TransactionTable from '@/components/transactions/TransactionTable';
 
 export default function TransactionExplorer() {
   return (
@@ -22,6 +23,9 @@ export default function TransactionExplorer() {
           </div>
           <WalletCharts />
           <NetworkStats />
+          <div className="mt-6">
+            <TransactionTable />
+          </div>
         </div>
       </div>
     </div>
