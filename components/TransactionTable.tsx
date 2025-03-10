@@ -22,13 +22,13 @@ interface Transaction {
 export default function TransactionTable({ data }: TransactionTableProps) {
   const searchParams = useSearchParams()
   const address = searchParams.get("address")
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>(data || [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
 
   useEffect(() => {
-    if (address) {
+    if (!data && address) {
       setLoading(true)
       setError(null)
       fetch(`/api/transactions?address=${address}&page=${page}&offset=20`)
@@ -50,7 +50,7 @@ export default function TransactionTable({ data }: TransactionTableProps) {
         })
         .finally(() => setLoading(false))
     }
-  }, [address, page])
+  }, [address, page, data])
 
   const categorizeTransaction = (tx: Transaction, userAddress: string): Transaction["type"] => {
     if (tx.from === userAddress && tx.to === userAddress) return "swap"

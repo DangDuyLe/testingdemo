@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { runQuery } from '@/lib/neo4j'
+import { runQueryWithRetry } from '@/lib/neo4j'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Cypher query để search transactions
+    // Cypher query to search transactions
     const query = `
       MATCH (from:Wallet)-[tx:SENT]->(to:Wallet)
       WHERE from.address = $address OR to.address = $address
@@ -22,8 +22,12 @@ export async function GET(request: Request) {
       LIMIT 100
     `
 
-    const records = await runQuery(query, { address })
+    const records = await runQueryWithRetry(query, { address }, 3)
     
+    if (!records || records.length === 0) {
+      return NextResponse.json({ transactions: [] })
+    }
+
     const transactions = records.map(record => ({
       from: record.get('from').properties,
       transaction: record.get('tx').properties,
@@ -33,8 +37,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ transactions })
   } catch (error) {
     console.error('Search API Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch transactions'
     return NextResponse.json(
-      { error: 'Failed to fetch transactions' },
+      { error: errorMessage },
       { status: 500 }
     )
   }

@@ -1,4 +1,4 @@
-import neo4j, { Driver } from 'neo4j-driver'
+import neo4j, { Driver, Session } from 'neo4j-driver'
 
 let driver: Driver | null = null
 
@@ -12,15 +12,26 @@ export function getDriver(): Driver {
       throw new Error('Neo4j environment variables are not properly configured')
     }
 
-    driver = neo4j.driver(
-      uri,
-      neo4j.auth.basic(username, password),
-      {
-        maxConnectionLifetime: 3 * 60 * 60 * 1000, // 3 hours
-        maxConnectionPoolSize: 50,
-        connectionAcquisitionTimeout: 2 * 60 * 1000, // 2 minutes
-      }
-    )
+    try {
+      driver = neo4j.driver(
+        uri,
+        neo4j.auth.basic(username, password),
+        {
+          maxConnectionLifetime: 3 * 60 * 60 * 1000, // 3 hours
+          maxConnectionPoolSize: 50,
+          connectionAcquisitionTimeout: 2 * 60 * 1000, // 2 minutes
+          logging: {
+            level: 'info',
+            logger: (level, message) => {
+              console.log(`[Neo4j ${level}] ${message}`)
+            }
+          }
+        }
+      )
+    } catch (error) {
+      console.error('Failed to create Neo4j driver:', error)
+      throw error
+    }
   }
 
   return driver
@@ -28,23 +39,38 @@ export function getDriver(): Driver {
 
 export async function closeDriver(): Promise<void> {
   if (driver) {
-    await driver.close()
-    driver = null
+    try {
+      await driver.close()
+      driver = null
+    } catch (error) {
+      console.error('Error closing Neo4j driver:', error)
+      throw error
+    }
   }
 }
 
-// Helper function to run queries
+// Helper function to run queries with session management
 export async function runQuery(cypher: string, params = {}) {
-  const session = getDriver().session()
+  let session: Session | null = null
   try {
+    session = getDriver().session()
     const result = await session.run(cypher, params)
     return result.records
+  } catch (error) {
+    console.error('Error executing Neo4j query:', error)
+    throw error
   } finally {
-    await session.close()
+    if (session) {
+      try {
+        await session.close()
+      } catch (error) {
+        console.error('Error closing Neo4j session:', error)
+      }
+    }
   }
 }
 
-// Initialize driver when the app starts
+// Initialize driver with connectivity check
 export async function initializeDriver(): Promise<void> {
   try {
     const driver = getDriver()
@@ -56,33 +82,38 @@ export async function initializeDriver(): Promise<void> {
   }
 }
 
-// Thêm retry logic
+// Query execution with retry logic
 export async function runQueryWithRetry(
   cypher: string,
   params = {},
   maxRetries = 3
-) {
-  let lastError
+): Promise<any[]> {
+  let lastError: Error | null = null
   
   for (let i = 0; i < maxRetries; i++) {
+    let session: Session | null = null
     try {
-      const session = getDriver().session()
-      try {
-        const result = await session.run(cypher, params)
-        return result.records
-      } finally {
-        await session.close()
-      }
+      session = getDriver().session()
+      const result = await session.run(cypher, params)
+      return result.records
     } catch (error) {
-      console.error(`Attempt ${i + 1} failed:`, error)
-      lastError = error
+      console.error(`Query attempt ${i + 1} failed:`, error)
+      lastError = error as Error
       
       // Wait before retrying (exponential backoff)
       if (i < maxRetries - 1) {
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000))
       }
+    } finally {
+      if (session) {
+        try {
+          await session.close()
+        } catch (error) {
+          console.error('Error closing Neo4j session:', error)
+        }
+      }
     }
   }
   
-  throw lastError
+  throw new Error(`Query failed after ${maxRetries} attempts: ${lastError?.message}`)
 }

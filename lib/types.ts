@@ -18,7 +18,7 @@ export interface TransactionGraphProps {
 }
 
 export interface TransactionTableProps {
-  data: any[];
+  data?: any[];
 }
 
 export interface NFTGalleryProps {

@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button"
 import Link from 'next/link'
 import { Eye, ChevronLeft, ChevronRight, Download, Copy } from 'lucide-react'
 import { toast } from "@/components/ui/use-toast"
-import { ethers } from 'ethers';
-import { formatEther } from 'ethers';
+import { utils } from 'ethers'
 
 interface Stats {
   transactions24h: number;
@@ -131,8 +130,8 @@ const getRelativeTime = (timestamp: number) => {
               age: getRelativeTime(timestamp),
               from: tx.from,
               to: tx.to || 'Contract Creation',
-              amount: formatEther(tx.value) + ' ETH',
-              fee: formatEther(BigInt(tx.gas) * BigInt(tx.gasPrice)),
+              amount: utils.formatEther(tx.value) + ' ETH',
+              fee: utils.formatEther(BigInt(tx.gas) * BigInt(tx.gasPrice)),
               timestamp: timestamp
             }
           })
